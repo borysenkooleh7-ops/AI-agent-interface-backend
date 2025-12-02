@@ -1,0 +1,621 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String     @id @default(cuid())
+  email     String     @unique
+  password  String
+  name      String
+  role      UserRole   @default(AGENT)
+  status    UserStatus @default(ACTIVE)
+  avatar    String?
+  phone     String?
+  lastLogin DateTime?
+
+  // Password Reset Fields
+  resetToken       String?   @unique
+  resetTokenExpiry DateTime?
+
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  deletedAt             DateTime?
+  deletedBy             String?
+  isDeleted             Boolean               @default(false)
+  activities            ActivityLog[]
+  conversations         Conversation[]
+  gyms                  GymUser[]
+  invitations           Invitation[]
+  notifications         Notification[]
+  approvedMembers       Member[]
+  approvedRegistrations RegistrationRequest[] @relation("RegistrationApprover")
+  rejectedRegistrations RegistrationRequest[] @relation("RegistrationRejecter")
+
+  @@index([isDeleted])
+  @@index([resetToken])
+  @@map("users")
+}
+
+model Gym {
+  id                   String                @id @default(cuid())
+  name                 String
+  slug                 String                @unique
+  address              String?
+  city                 String?
+  state                String?
+  zipCode              String?
+  phone                String?
+  email                String?
+  logo                 String?
+  registrationUrl      String? // Registration link for plan sign-ups
+  status               GymStatus             @default(ACTIVE)
+  settings             Json?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  deletedAt            DateTime?
+  deletedBy            String?
+  isDeleted            Boolean               @default(false)
+  aiPrompts            AIPrompt?
+  advantages           GymAdvantage[]
+  users                GymUser[]
+  invitations          Invitation[]
+  leads                Lead[]
+  whatsappAccounts     WhatsAppAccount[]
+  integrations         Integration[]
+  webhooks             Webhook[]
+  plans                Plan[]
+  members              Member[]
+  registrationRequests RegistrationRequest[]
+
+  @@index([isDeleted])
+  @@map("gyms")
+}
+
+model GymAdvantage {
+  id          String   @id @default(cuid())
+  gymId       String
+  title       String
+  description String?
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  gym         Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade)
+
+  @@index([gymId])
+  @@map("gym_advantages")
+}
+
+model GymUser {
+  id        String   @id @default(cuid())
+  userId    String
+  gymId     String
+  role      UserRole @default(AGENT)
+  createdAt DateTime @default(now())
+  gym       Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, gymId])
+  @@map("gym_users")
+}
+
+model Lead {
+  id        String     @id @default(cuid())
+  gymId     String
+  name      String
+  email     String?
+  phone     String
+  cpf       String?    @unique
+  birthDate DateTime?
+  address   String?
+  zipCode   String?
+  status    LeadStatus @default(NEW)
+  source    LeadSource @default(WHATSAPP)
+  score     Int        @default(0)
+  notes     String?
+
+  evoMemberId  String?
+  assignedToId String?
+
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  deletedAt     DateTime?
+  deletedBy     String?
+  isDeleted     Boolean        @default(false)
+  activities    ActivityLog[]
+  conversations Conversation[]
+  followUps     FollowUp[]
+  members       Member[]
+  gym           Gym            @relation(fields: [gymId], references: [id], onDelete: Cascade)
+
+  @@unique([gymId, phone])
+  @@index([isDeleted])
+  @@index([gymId, isDeleted])
+  @@index([status])
+  @@index([assignedToId])
+  @@map("leads")
+}
+
+model Conversation {
+  id          String             @id @default(cuid())
+  leadId      String
+  userId      String?
+  channel     String             @default("whatsapp")
+  status      ConversationStatus @default(ACTIVE)
+  lastMessage DateTime?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  deletedAt   DateTime?
+  deletedBy   String?
+  isDeleted   Boolean            @default(false)
+  lead        Lead               @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  user        User?              @relation(fields: [userId], references: [id])
+  messages    Message[]
+
+  @@index([isDeleted])
+  @@map("conversations")
+}
+
+model Message {
+  id             String        @id @default(cuid())
+  conversationId String
+  content        String
+  type           MessageType   @default(TEXT)
+  sender         MessageSender
+  metadata       Json?
+  sentAt         DateTime      @default(now())
+  deliveredAt    DateTime?
+  readAt         DateTime?
+  deletedAt      DateTime?
+  isDeleted      Boolean       @default(false)
+  conversation   Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([isDeleted])
+  @@map("messages")
+}
+
+model FollowUp {
+  id          String         @id @default(cuid())
+  leadId      String
+  type        FollowUpType
+  status      FollowUpStatus @default(PENDING)
+  scheduledAt DateTime
+  completedAt DateTime?
+  notes       String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  lead        Lead           @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@map("follow_ups")
+}
+
+model AIPrompt {
+  id                String   @id @default(cuid())
+  gymId             String   @unique
+  systemPrompt      String
+  greetingMessage   String?
+  qualificationFlow Json?
+  objectionHandling Json?
+  faqs              Json?
+  escalationRules   Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  gym               Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade)
+
+  @@map("ai_prompts")
+}
+
+// WhatsApp Meta Configuration (Shared across all gyms)
+model WhatsAppMetaConfig {
+  id                    String   @id @default(cuid())
+  metaBusinessManagerId String?
+  metaAppId             String?
+  metaAppSecret         String?
+  webhookVerifyToken    String?
+  webhookUrl            String? // e.g., https://api.duxfit.com/webhooks/whatsapp
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@map("whatsapp_meta_config")
+}
+
+model WhatsAppAccount {
+  id            String         @id @default(cuid())
+  gymId         String
+  phoneNumber   String         @unique
+  phoneNumberId String
+  accessToken   String // Per-gym permanent access token
+  status        WhatsAppStatus @default(PENDING)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  gym           Gym            @relation(fields: [gymId], references: [id], onDelete: Cascade)
+
+  @@map("whatsapp_accounts")
+}
+
+model Plan {
+  id          String   @id @default(cuid())
+  gymId       String
+  name        String
+  description String?
+  price       Float
+  duration    Int // Duration in days
+  features    Json? // Array of features/benefits
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  gym         Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  members     Member[]
+
+  @@index([gymId])
+  @@index([active])
+  @@map("plans")
+}
+
+model Member {
+  id                   String        @id @default(cuid())
+  gymId                String
+  leadId               String? // Link to original lead if converted from lead
+  planId               String? // Selected plan
+  // Registration Information
+  fullName             String
+  cpf                  String        @unique
+  birthDate            DateTime
+  address              String?
+  zipCode              String?
+  preferredWorkoutTime String? // e.g., "Morning", "Afternoon", "Evening"
+  gymGoal              String? // Fitness goal
+  email                String?
+  phone                String // WhatsApp number
+  // Membership Information
+  status               MemberStatus  @default(PENDING)
+  planExpirationDate   DateTime?
+  approvedBy           String? // User ID who approved
+  approvedAt           DateTime?
+  // Soft Delete
+  isDeleted            Boolean       @default(false)
+  deletedAt            DateTime?
+  deletedBy            String?
+  // Timestamps
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  // Relations
+  gym                  Gym           @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  plan                 Plan?         @relation(fields: [planId], references: [id])
+  lead                 Lead?         @relation(fields: [leadId], references: [id])
+  approver             User?         @relation(fields: [approvedBy], references: [id])
+  activities           ActivityLog[]
+
+  @@index([gymId])
+  @@index([isDeleted])
+  @@index([status])
+  @@index([cpf])
+  @@index([phone])
+  @@map("members")
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  message   String
+  data      Json?
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+model ActivityLog {
+  id          String       @id @default(cuid())
+  userId      String?
+  leadId      String?
+  memberId    String?
+  gymId       String?
+  type        ActivityType
+  description String
+  metadata    Json?
+  createdAt   DateTime     @default(now())
+  lead        Lead?        @relation(fields: [leadId], references: [id])
+  member      Member?      @relation(fields: [memberId], references: [id])
+  user        User?        @relation(fields: [userId], references: [id])
+
+  @@map("activity_logs")
+}
+
+model Invitation {
+  id        String    @id @default(cuid())
+  code      String    @unique
+  email     String
+  gymId     String
+  role      UserRole
+  invitedBy String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  deletedBy String?
+  gym       Gym       @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  inviter   User      @relation(fields: [invitedBy], references: [id], onDelete: Cascade)
+
+  @@index([isDeleted])
+  @@index([code])
+  @@index([email])
+  @@map("invitations")
+}
+
+model RegistrationRequest {
+  id              String                    @id @default(cuid())
+  name            String
+  email           String
+  phone           String?
+  password        String // Hashed password
+  role            UserRole // AGENT or MANAGER
+  gymId           String
+  status          RegistrationRequestStatus @default(PENDING)
+  requestedBy     String? // User ID if logged in
+  approvedBy      String? // User ID who approved
+  rejectedBy      String? // User ID who rejected
+  approvedAt      DateTime?
+  rejectedAt      DateTime?
+  rejectionReason String?
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+
+  gym      Gym   @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  approver User? @relation("RegistrationApprover", fields: [approvedBy], references: [id])
+  rejecter User? @relation("RegistrationRejecter", fields: [rejectedBy], references: [id])
+
+  @@index([status])
+  @@index([gymId])
+  @@index([email])
+  @@index([role])
+  @@map("registration_requests")
+}
+
+enum RegistrationRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  AGENT
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum GymStatus {
+  ACTIVE
+  INACTIVE
+  TRIAL
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  NEGOTIATING
+  CLOSED
+  LOST
+}
+
+enum LeadSource {
+  WHATSAPP
+  WEBSITE
+  INSTAGRAM
+  FACEBOOK
+  REFERRAL
+  WALK_IN
+  PHONE
+  OTHER
+}
+
+enum ConversationStatus {
+  ACTIVE
+  CLOSED
+  ARCHIVED
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  DOCUMENT
+  AUDIO
+  VIDEO
+}
+
+enum MessageSender {
+  AI
+  AGENT
+  CUSTOMER
+}
+
+enum FollowUpStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+  OVERDUE
+}
+
+enum FollowUpType {
+  CALL
+  WHATSAPP
+  EMAIL
+  VISIT
+}
+
+enum WhatsAppStatus {
+  ACTIVE
+  INACTIVE
+  PENDING
+}
+
+enum NotificationType {
+  NEW_LEAD
+  NEW_MESSAGE
+  FOLLOW_UP_DUE
+  SYSTEM_ALERT
+  LEAD_STATUS_CHANGE
+  MEMBER_APPLICATION_RECEIVED
+  MEMBER_APPLICATION_APPROVED
+  MEMBER_APPLICATION_REJECTED
+  HUMAN_ASSISTANCE_REQUESTED
+  REGISTRATION_REQUEST_CREATED
+  REGISTRATION_REQUEST_APPROVED
+  REGISTRATION_REQUEST_REJECTED
+}
+
+enum ActivityType {
+  LEAD_CREATED
+  LEAD_UPDATED
+  LEAD_STATUS_CHANGED
+  MESSAGE_SENT
+  FOLLOW_UP_CREATED
+  FOLLOW_UP_COMPLETED
+  USER_LOGIN
+  CONVERSATION_STARTED
+  CONVERSATION_CLOSED
+  MEMBER_APPLICATION_CREATED
+  MEMBER_APPLICATION_APPROVED
+  MEMBER_APPLICATION_REJECTED
+  MEMBER_UPDATED
+  MEMBER_DELETED
+}
+
+// Integration Models
+model Integration {
+  id            String            @id @default(cuid())
+  gymId         String
+  type          IntegrationType
+  name          String
+  status        IntegrationStatus @default(INACTIVE)
+  config        Json
+  lastSyncAt    DateTime?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  gym           Gym               @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  syncHistory   SyncHistory[]
+  fieldMappings FieldMapping[]
+
+  @@unique([gymId, type])
+  @@map("integrations")
+}
+
+model SyncHistory {
+  id            String      @id @default(cuid())
+  integrationId String
+  type          SyncType
+  status        SyncStatus
+  recordsSynced Int         @default(0)
+  duration      Int         @default(0) // in milliseconds
+  errorMessage  String?
+  metadata      Json?
+  startedAt     DateTime    @default(now())
+  completedAt   DateTime?
+  integration   Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@index([integrationId])
+  @@index([startedAt])
+  @@map("sync_history")
+}
+
+model FieldMapping {
+  id            String      @id @default(cuid())
+  integrationId String
+  duxfitField   String
+  externalField String
+  isActive      Boolean     @default(true)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  integration   Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@unique([integrationId, duxfitField])
+  @@map("field_mappings")
+}
+
+model Webhook {
+  id            String       @id @default(cuid())
+  gymId         String
+  name          String
+  url           String
+  events        String[] // Array of event types to listen for
+  secret        String?
+  isActive      Boolean      @default(true)
+  lastTriggered DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  gym           Gym          @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  webhookLogs   WebhookLog[]
+
+  @@map("webhooks")
+}
+
+model WebhookLog {
+  id          String   @id @default(cuid())
+  webhookId   String
+  eventType   String
+  payload     Json
+  response    Json?
+  statusCode  Int?
+  duration    Int? // in milliseconds
+  error       String?
+  triggeredAt DateTime @default(now())
+  webhook     Webhook  @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([webhookId])
+  @@index([triggeredAt])
+  @@map("webhook_logs")
+}
+
+enum IntegrationType {
+  EVO
+  GOOGLE_ANALYTICS
+  FACEBOOK_PIXEL
+  ZAPIER
+  WEBHOOK
+  CUSTOM
+}
+
+enum IntegrationStatus {
+  ACTIVE
+  INACTIVE
+  ERROR
+  PENDING
+}
+
+enum SyncType {
+  MANUAL
+  AUTO
+  SCHEDULED
+}
+
+enum SyncStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+  CANCELLED
+}
+
+enum MemberStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  ACTIVE
+  INACTIVE
+  EXPIRED
+}

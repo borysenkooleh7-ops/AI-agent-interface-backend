@@ -1,0 +1,5 @@
+-- Add new notification types for registration requests
+ALTER TYPE "NotificationType" ADD VALUE 'REGISTRATION_REQUEST_CREATED';
+ALTER TYPE "NotificationType" ADD VALUE 'REGISTRATION_REQUEST_APPROVED';
+ALTER TYPE "NotificationType" ADD VALUE 'REGISTRATION_REQUEST_REJECTED';
+

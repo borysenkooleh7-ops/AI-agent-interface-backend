@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "NotificationType" ADD VALUE 'HUMAN_ASSISTANCE_REQUESTED';
