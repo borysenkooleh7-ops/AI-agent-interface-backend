@@ -1,13 +1,16 @@
 import prisma from '../config/database';
 
 export interface CreateAIPromptData {
-  gymId: string;
+  agencyId: string;
   systemPrompt: string;
   greetingMessage?: string;
   qualificationFlow?: any;
   objectionHandling?: any;
   faqs?: any;
   escalationRules?: any;
+  propertyInquiryPrompt?: string;
+  visitSchedulingPrompt?: string;
+  priceNegotiationPrompt?: string;
 }
 
 export interface UpdateAIPromptData {
@@ -17,16 +20,19 @@ export interface UpdateAIPromptData {
   objectionHandling?: any;
   faqs?: any;
   escalationRules?: any;
+  propertyInquiryPrompt?: string;
+  visitSchedulingPrompt?: string;
+  priceNegotiationPrompt?: string;
 }
 
 /**
- * Get AI prompt for a gym
+ * Get AI prompt for an agency
  */
-export async function getAIPrompt(gymId: string) {
+export async function getAIPrompt(agencyId: string) {
   const prompt = await prisma.aIPrompt.findUnique({
-    where: { gymId },
+    where: { agencyId },
     include: {
-      gym: {
+      agency: {
         select: {
           id: true,
           name: true,
@@ -37,227 +43,357 @@ export async function getAIPrompt(gymId: string) {
   });
 
   if (!prompt) {
-    throw new Error('AI Prompt not found for this gym');
+    throw new Error('AI Prompt no encontrado para esta agencia');
   }
 
   return prompt;
 }
 
 /**
- * Create AI prompt for a gym
+ * Create AI prompt for an agency
  */
 export async function createAIPrompt(data: CreateAIPromptData, createdBy: string) {
-  // Check if gym exists
-  const gym = await prisma.gym.findUnique({
-    where: { id: data.gymId }
+  // Check if agency exists
+  const agency = await prisma.agency.findUnique({
+    where: { id: data.agencyId }
   });
 
-  if (!gym) {
-    throw new Error('Gym not found');
+  if (!agency) {
+    throw new Error('Agencia no encontrada');
   }
 
-  // Check if AI prompt already exists for this gym
+  // Check if AI prompt already exists for this agency
   const existing = await prisma.aIPrompt.findUnique({
-    where: { gymId: data.gymId }
+    where: { agencyId: data.agencyId }
   });
 
   if (existing) {
-    throw new Error('AI Prompt already exists for this gym');
+    throw new Error('Ya existe un AI Prompt para esta agencia');
   }
 
   const prompt = await prisma.aIPrompt.create({
     data: {
-      gymId: data.gymId,
+      agencyId: data.agencyId,
       systemPrompt: data.systemPrompt,
       greetingMessage: data.greetingMessage,
       qualificationFlow: data.qualificationFlow || {},
       objectionHandling: data.objectionHandling || {},
       faqs: data.faqs || {},
-      escalationRules: data.escalationRules || {}
+      escalationRules: data.escalationRules || {},
+      propertyInquiryPrompt: data.propertyInquiryPrompt,
+      visitSchedulingPrompt: data.visitSchedulingPrompt,
+      priceNegotiationPrompt: data.priceNegotiationPrompt
     }
   });
 
-  console.log(`✅ AI Prompt created for gym ${gym.name} by ${createdBy}`);
+  console.log(`✅ AI Prompt creado para agencia ${agency.name} por ${createdBy}`);
   return prompt;
 }
 
 /**
  * Update AI prompt
  */
-export async function updateAIPrompt(gymId: string, data: UpdateAIPromptData, updatedBy: string) {
+export async function updateAIPrompt(agencyId: string, data: UpdateAIPromptData, updatedBy: string) {
   const existing = await prisma.aIPrompt.findUnique({
-    where: { gymId }
+    where: { agencyId }
   });
 
   if (!existing) {
-    throw new Error('AI Prompt not found');
+    throw new Error('AI Prompt no encontrado');
   }
 
   const prompt = await prisma.aIPrompt.update({
-    where: { gymId },
+    where: { agencyId },
     data
   });
 
-  console.log(`✅ AI Prompt updated for gym ${gymId} by ${updatedBy}`);
+  console.log(`✅ AI Prompt actualizado para agencia ${agencyId} por ${updatedBy}`);
   return prompt;
 }
 
 /**
  * Delete AI prompt
  */
-export async function deleteAIPrompt(gymId: string, deletedBy: string) {
+export async function deleteAIPrompt(agencyId: string, deletedBy: string) {
   const prompt = await prisma.aIPrompt.delete({
-    where: { gymId }
+    where: { agencyId }
   });
 
-  console.log(`🗑️ AI Prompt deleted for gym ${gymId} by ${deletedBy}`);
+  console.log(`🗑️ AI Prompt eliminado para agencia ${agencyId} por ${deletedBy}`);
   return prompt;
 }
 
 /**
- * Get default AI prompt template
+ * Get default AI prompt template for real estate
  */
 export function getDefaultPromptTemplate() {
   return {
-    systemPrompt: `You are an AI sales assistant for {gym_name}, located at {gym_address}.
+    systemPrompt: `Eres un asistente virtual de ventas inmobiliarias para {agency_name}, ubicada en {agency_address}.
 
-Your Objective:
-- Provide friendly, persuasive customer service
-- Qualify leads by collecting required information
-- Answer questions about plans, pricing, and facilities
-- Handle objections professionally
-- Guide customers toward registration
+Tu Objetivo:
+- Proporcionar un servicio al cliente amable y profesional
+- Cualificar leads recopilando información sobre sus necesidades inmobiliarias
+- Responder preguntas sobre propiedades, precios y ubicaciones
+- Manejar objeciones de manera profesional
+- Guiar a los clientes hacia la programación de visitas
 
-Your Tone:
-- Friendly and energetic
-- Confident but not pushy
-- Use emojis appropriately (💪🔥👏)
-- Professional yet approachable
+Tu Tono:
+- Profesional pero cercano
+- Experto en el sector inmobiliario
+- Paciente y servicial
+- Usa emojis con moderación (🏠🔑✨)
 
-Gym Information:
-- Name: {gym_name}
-- Location: {gym_address}
-- Size: {gym_size}m²
-- Equipment: {gym_equipment}
+Información de la Agencia:
+- Nombre: {agency_name}
+- Ubicación: {agency_address}
+- Teléfono: {agency_phone}
+- Email: {agency_email}
 
-Operating Hours:
-{operating_hours}
+Horario de Atención:
+- Lunes a Viernes: 9:00 - 20:00
+- Sábados: 10:00 - 14:00
 
-Required Information to Collect:
-- Full Name
-- CPF
-- Date of Birth
-- Address + ZIP Code
-- Preferred Workout Time
-- Fitness Goal
-- Email Address
+Información a Recopilar del Cliente:
+- Nombre completo
+- Teléfono de contacto
+- Tipo de operación (compra, alquiler, venta)
+- Tipo de inmueble de interés
+- Presupuesto aproximado
+- Zonas preferidas
+- Número de habitaciones deseadas
+- Características especiales (parking, terraza, piscina, etc.)
+- Urgencia (inmediato, 1-3 meses, sin prisa)
 
-When to Escalate to Human:
-- Billing disputes or refunds
-- Cancellation requests
-- HR or employment questions
-- Complex technical issues
-- Customer insists on speaking to human
+Cuándo Derivar a un Agente Humano:
+- Negociaciones de precio complejas
+- Consultas legales o fiscales
+- Reclamaciones o quejas
+- El cliente insiste en hablar con una persona
+- Visitas inmediatas o urgentes
 
-Redirect Rules:
-- For unlisted inquiries → Instagram {gym_instagram}
-- For resumes/jobs → {gym_email}`,
-    
-    greetingMessage: "🎉 Hello, welcome to {gym_name}! 💪🔥\n\n👉 What's your question, or how can I help you today?\n\n🙌 If you're not yet a customer, to make your registration easier, please provide me with:\nFull name, CPF, date of birth, address + zip code, preferred workout time, gym goal, and email address.",
-    
+Reglas de Respuesta:
+- Siempre ofrece opciones de propiedades cuando el cliente da su presupuesto y preferencias
+- Menciona siempre la posibilidad de agendar una visita
+- Si no tienes propiedades que coincidan, toma nota de sus datos para avisarle cuando haya algo
+- Nunca inventes propiedades que no existen`,
+
+    greetingMessage: "🏠 ¡Hola! Bienvenido/a a {agency_name}.\n\n¿En qué puedo ayudarte hoy?\n\n• 🔍 Buscar propiedades en venta o alquiler\n• 📅 Agendar una visita\n• 💰 Consultar precios\n• 📋 Vender o alquilar tu propiedad\n\n¡Cuéntame qué necesitas! 😊",
+
+    propertyInquiryPrompt: `Cuando el cliente pregunte por propiedades:
+
+1. Primero, identifica el tipo de operación (compra/alquiler)
+2. Pregunta por el tipo de inmueble preferido
+3. Consulta el presupuesto aproximado
+4. Pregunta por las zonas de interés
+5. Confirma el número de habitaciones y baños deseados
+6. Pregunta por características especiales importantes
+
+Una vez tengas esta información, busca propiedades que coincidan y preséntales las mejores opciones.
+Siempre ofrece programar una visita después de presentar opciones.`,
+
+    visitSchedulingPrompt: `Para agendar visitas:
+
+1. Confirma la propiedad o propiedades de interés
+2. Pregunta por fecha y hora preferida
+3. Solicita nombre y teléfono de contacto
+4. Confirma los datos de la visita
+5. Indica que un agente confirmará la cita
+
+Horarios disponibles para visitas:
+- Lunes a Viernes: 9:00 - 20:00
+- Sábados: 10:00 - 14:00
+
+Recuerda confirmar la dirección exacta de la propiedad y pedir puntualidad.`,
+
+    priceNegotiationPrompt: `Para consultas de precio:
+
+1. Proporciona el precio actual de la propiedad
+2. Menciona si hay margen de negociación (si lo sabes)
+3. Ofrece calcular la cuota hipotecaria aproximada (si es venta)
+4. Menciona los gastos adicionales típicos (ITP, notaría, etc.)
+5. Siempre sugiere una visita para valorar mejor la propiedad
+
+Si el cliente quiere negociar el precio, indica que un agente especializado se pondrá en contacto para estudiar su propuesta.`,
+
     qualificationFlow: {
       steps: [
         {
           field: "name",
-          question: "To get started, what's your full name?",
+          question: "Para empezar, ¿cuál es tu nombre?",
           required: true
         },
         {
-          field: "cpf",
-          question: "Great! And what's your CPF for registration?",
+          field: "transactionType",
+          question: "¿Buscas comprar o alquilar?",
           required: true,
-          validation: "cpf"
+          options: ["Comprar", "Alquilar", "Vender"]
         },
         {
-          field: "birthDate",
-          question: "Perfect! What's your date of birth? (DD/MM/YYYY)",
-          required: true,
-          validation: "date"
-        },
-        {
-          field: "goal",
-          question: "Awesome! What's your main fitness goal?",
+          field: "propertyType",
+          question: "¿Qué tipo de inmueble te interesa? (piso, casa, chalet, local...)",
           required: true
         },
         {
-          field: "preferredTime",
-          question: "When do you prefer to work out?",
+          field: "budget",
+          question: "¿Cuál es tu presupuesto aproximado?",
+          required: true
+        },
+        {
+          field: "zones",
+          question: "¿En qué zonas o barrios te gustaría buscar?",
+          required: true
+        },
+        {
+          field: "bedrooms",
+          question: "¿Cuántas habitaciones necesitas como mínimo?",
           required: false
         },
         {
-          field: "email",
-          question: "Last step! What's your email address?",
+          field: "features",
+          question: "¿Hay alguna característica especial que sea importante para ti? (parking, terraza, ascensor, etc.)",
+          required: false
+        },
+        {
+          field: "timeline",
+          question: "¿Para cuándo necesitas el inmueble?",
+          required: false,
+          options: ["Inmediato", "1-3 meses", "3-6 meses", "Sin prisa"]
+        },
+        {
+          field: "phone",
+          question: "¿Me facilitas un teléfono de contacto para enviarte las mejores opciones?",
           required: true,
-          validation: "email"
+          validation: "phone"
         }
       ]
     },
-    
+
     objectionHandling: {
       objections: [
         {
-          trigger: "I'll think about it|I need to think|let me think",
-          response: "I totally understand! Taking time to think is smart. Just so you know, our pre-sale offer ends soon, and spots are filling up fast. Can I secure your spot with just R$9.99 for the first month while you decide?"
+          trigger: "lo tengo que pensar|necesito pensarlo|déjame pensarlo",
+          response: "Entiendo perfectamente. Es una decisión importante. ¿Te parece si mientras tanto te envío más información sobre las propiedades que hemos visto? También puedo programarte una visita sin compromiso para que puedas verlas en persona y decidir mejor. ¿Qué te parece?"
         },
         {
-          trigger: "too expensive|can't afford|very expensive",
-          response: "I hear you! That's exactly why we created our annual plan at R$99.99/month - less than R$3.50 per day. That's less than a coffee! Plus, investing in your health now saves you money on medical bills later. Would you like me to break down the savings?"
+          trigger: "es muy caro|está muy caro|fuera de presupuesto|no me lo puedo permitir",
+          response: "Entiendo tu preocupación por el precio. Tenemos propiedades en diferentes rangos de precios. ¿Te gustaría que busquemos opciones más ajustadas a tu presupuesto? También podría informarte sobre opciones de financiación. ¿Cuál sería un precio máximo cómodo para ti?"
         },
         {
-          trigger: "no time|don't have time|too busy",
-          response: "I totally get it - life is busy! That's why we're open 24/5. You can work out at 5 AM, midnight, or whenever works for you. Even 20 minutes a day makes a difference. Would you like to start with a flexible schedule?"
+          trigger: "no tengo tiempo|estoy muy ocupado|ahora no puedo",
+          response: "Comprendo que estés ocupado/a. Podemos adaptarnos a tu horario. Tenemos disponibilidad de lunes a sábado, incluyendo visitas a primera hora o a última hora de la tarde. ¿Qué día y hora te vendría mejor?"
+        },
+        {
+          trigger: "ya estoy mirando con otra inmobiliaria|tengo otro agente",
+          response: "Me parece genial que compares opciones. Nosotros podríamos ofrecerte propiedades exclusivas que quizás no has visto. ¿Te gustaría que te envíe nuestra cartera de inmuebles? Así puedes comparar sin compromiso."
+        },
+        {
+          trigger: "los precios van a bajar|espero que bajen|mejor espero",
+          response: "Es cierto que el mercado es dinámico. Sin embargo, las buenas oportunidades suelen irse rápido. ¿Te gustaría que te avise cuando aparezca algo especialmente interesante en tu zona? Así podrás decidir en el momento sin perder la oportunidad."
         }
       ]
     },
-    
+
     faqs: {
       questions: [
         {
-          question: "What are your hours?",
-          keywords: ["hours|open|close|schedule|time"],
-          answer: "We're open 24/5! That's 24 hours on Monday-Friday, and 7 AM to 7 PM on weekends and holidays. You can work out whenever it fits your schedule! 🕐"
+          question: "¿Cuáles son vuestros honorarios?",
+          keywords: ["honorarios|comisión|cuánto cobráis|precio servicios"],
+          answer: "Nuestros honorarios dependen del tipo de operación. En ventas, normalmente es un porcentaje del precio de venta (entre 3-5%). En alquileres, suele ser una mensualidad. Te explicamos todos los detalles sin compromiso. ¿Te gustaría que un agente te llame para concretarlo?"
         },
         {
-          question: "Do you have a kids room?",
-          keywords: ["kids|children|child|baby"],
-          answer: "Yes! Our DUX KIDS room welcomes children aged 2.5 to 10 years. It has a monitor and security cameras, and is open 6-9 AM and 4-9 PM. It's included FREE with all memberships! 👶"
+          question: "¿Qué documentos necesito para alquilar?",
+          keywords: ["documentos alquiler|papeles|requisitos inquilino"],
+          answer: "Para alquilar normalmente necesitas: DNI/NIE, nóminas de los últimos 3 meses, contrato de trabajo y posiblemente aval bancario o depósito. Dependiendo del propietario pueden variar. ¿Ya tienes estos documentos preparados?"
         },
         {
-          question: "What equipment do you have?",
-          keywords: ["equipment|machines|weights|cardio"],
-          answer: "We have top-of-the-line Speedo equipment across 3,000m²! That includes cardio machines, free weights, machines, and everything you need for a complete workout. 🏋️"
+          question: "¿Qué gastos tiene comprar una casa?",
+          keywords: ["gastos compra|impuestos|ITP|notaría|gestoría"],
+          answer: "Al comprar hay que considerar: ITP (6-10% según comunidad) o IVA (10% obra nueva), notaría (0,5-1%), registro (0,5%), gestoría (300-500€). En total, calcula un 10-12% adicional al precio de compra. ¿Quieres que te hagamos un cálculo detallado?"
         },
         {
-          question: "Do you have parking?",
-          keywords: ["parking|park|car"],
-          answer: "Yes! We have FREE parking for all members with security. 🚗"
+          question: "¿Ofrecéis hipotecas?",
+          keywords: ["hipoteca|financiación|préstamo|crédito"],
+          answer: "Colaboramos con los principales bancos y brokers hipotecarios. Podemos ayudarte a conseguir las mejores condiciones. ¿Te gustaría que un asesor financiero te llame para hacer un estudio sin compromiso?"
+        },
+        {
+          question: "¿Puedo visitar el inmueble?",
+          keywords: ["visitar|ver piso|ver casa|cita|enseñar"],
+          answer: "¡Por supuesto! Organizamos visitas de lunes a sábado. ¿Qué día y hora te vendría mejor? Recuerda traer tu DNI para el registro de la visita."
+        },
+        {
+          question: "¿Aceptan mascotas?",
+          keywords: ["mascotas|perro|gato|animales"],
+          answer: "Depende de cada propietario. Tenemos propiedades donde sí se aceptan mascotas. ¿Tienes mascota? Dime qué tipo y tamaño y buscaré opciones adecuadas para ti."
         }
       ]
     },
-    
+
     escalationRules: {
       keywords: {
-        billing: ["refund", "charge", "payment issue", "double charged", "billing"],
-        cancellation: ["cancel", "quit", "leave", "unsubscribe", "terminate"],
-        hr: ["job", "work here", "hiring", "resume", "curriculum", "employment"],
-        complex: ["speak to manager", "talk to human", "real person", "agent"]
+        legal: ["demanda", "denuncia", "abogado", "legal", "juicio", "problema legal"],
+        pricing: ["negociar precio", "rebaja", "descuento", "última oferta", "contraoferta"],
+        complaint: ["queja", "reclamación", "estafa", "engaño", "problema grave"],
+        human: ["hablar con persona", "agente humano", "persona real", "no quiero robot", "hablar con alguien"]
       },
       actions: {
-        billing: "transfer_to_billing",
-        cancellation: "transfer_to_manager",
-        hr: "redirect_to_email",
-        complex: "transfer_to_agent"
+        legal: "transfer_to_manager",
+        pricing: "transfer_to_agent",
+        complaint: "transfer_to_manager",
+        human: "transfer_to_agent"
       }
+    }
+  };
+}
+
+/**
+ * Get real estate specific prompt additions
+ */
+export function getRealEstatePromptAdditions() {
+  return {
+    propertyTypes: {
+      APARTMENT: "Piso",
+      HOUSE: "Casa",
+      VILLA: "Chalet",
+      PENTHOUSE: "Ático",
+      DUPLEX: "Dúplex",
+      STUDIO: "Estudio",
+      LOFT: "Loft",
+      TOWNHOUSE: "Adosado",
+      COUNTRY_HOUSE: "Casa rural",
+      COMMERCIAL: "Local comercial",
+      OFFICE: "Oficina",
+      WAREHOUSE: "Nave industrial",
+      LAND: "Terreno",
+      PARKING: "Garaje",
+      STORAGE: "Trastero"
+    },
+    transactionTypes: {
+      SALE: "Venta",
+      RENT: "Alquiler",
+      RENT_TO_OWN: "Alquiler con opción a compra",
+      TRANSFER: "Traspaso"
+    },
+    commonFeatures: [
+      "Ascensor",
+      "Parking",
+      "Terraza",
+      "Balcón",
+      "Piscina",
+      "Jardín",
+      "Trastero",
+      "Aire acondicionado",
+      "Calefacción",
+      "Amueblado",
+      "Portero",
+      "Patio",
+      "Vistas al mar",
+      "Reformado"
+    ],
+    responseTemplates: {
+      propertyFound: "🏠 ¡Perfecto! He encontrado {count} propiedades que podrían interesarte:\n\n{properties}\n\n¿Te gustaría agendar una visita a alguna de ellas?",
+      noPropertyFound: "Actualmente no tenemos propiedades que coincidan exactamente con lo que buscas, pero he tomado nota de tus preferencias. Te avisaré en cuanto tengamos algo. Mientras tanto, ¿te gustaría ampliar un poco el rango de búsqueda?",
+      visitScheduled: "✅ ¡Visita programada!\n\n📍 Propiedad: {property}\n📅 Fecha: {date}\n⏰ Hora: {time}\n\nUn agente confirmará la cita. Por favor, llega puntual y trae tu DNI.",
+      followUp: "👋 ¡Hola! Te escribo para saber si tienes alguna pregunta más sobre las propiedades que viste. ¿Te gustaría programar otra visita?"
     }
   };
 }

@@ -7,6 +7,10 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ==========================================
+// USER MANAGEMENT
+// ==========================================
+
 model User {
   id        String     @id @default(cuid())
   email     String     @unique
@@ -22,17 +26,20 @@ model User {
   resetToken       String?   @unique
   resetTokenExpiry DateTime?
 
-  createdAt             DateTime              @default(now())
-  updatedAt             DateTime              @updatedAt
-  deletedAt             DateTime?
-  deletedBy             String?
-  isDeleted             Boolean               @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+  deletedBy String?
+  isDeleted Boolean   @default(false)
+
+  // Relations
   activities            ActivityLog[]
   conversations         Conversation[]
-  gyms                  GymUser[]
+  agencies              AgencyUser[]
   invitations           Invitation[]
   notifications         Notification[]
-  approvedMembers       Member[]
+  assignedProperties    Property[]
+  assignedVisits        PropertyVisit[]       @relation("AssignedAgent")
   approvedRegistrations RegistrationRequest[] @relation("RegistrationApprover")
   rejectedRegistrations RegistrationRequest[] @relation("RegistrationRejecter")
 
@@ -41,104 +48,333 @@ model User {
   @@map("users")
 }
 
-model Gym {
-  id                   String                @id @default(cuid())
-  name                 String
-  slug                 String                @unique
-  address              String?
-  city                 String?
-  state                String?
-  zipCode              String?
-  phone                String?
-  email                String?
-  logo                 String?
-  registrationUrl      String? // Registration link for plan sign-ups
-  status               GymStatus             @default(ACTIVE)
-  settings             Json?
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
-  deletedAt            DateTime?
-  deletedBy            String?
-  isDeleted            Boolean               @default(false)
+// ==========================================
+// AGENCY (INMOBILIARIA) - Replaces Gym
+// ==========================================
+
+model Agency {
+  id            String       @id @default(cuid())
+  name          String
+  slug          String       @unique
+  businessType  String?      @default("INMOBILIARIA") // INMOBILIARIA, PROMOTORA, etc.
+  licenseNumber String?      // Número de licencia inmobiliaria
+  address       String?
+  city          String?
+  state         String?
+  zipCode       String?
+  country       String?      @default("España")
+  phone         String?
+  email         String?
+  website       String?
+  logo          String?
+  zones         String[]     // Zonas de operación
+  status        AgencyStatus @default(ACTIVE)
+  settings      Json?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  deletedAt     DateTime?
+  deletedBy     String?
+  isDeleted     Boolean      @default(false)
+
+  // Relations
   aiPrompts            AIPrompt?
-  advantages           GymAdvantage[]
-  users                GymUser[]
+  advantages           AgencyAdvantage[]
+  users                AgencyUser[]
   invitations          Invitation[]
   leads                Lead[]
+  properties           Property[]
+  propertyVisits       PropertyVisit[]
   whatsappAccounts     WhatsAppAccount[]
   integrations         Integration[]
   webhooks             Webhook[]
-  plans                Plan[]
-  members              Member[]
+  voiceSessions        VoiceSession[]
   registrationRequests RegistrationRequest[]
 
   @@index([isDeleted])
-  @@map("gyms")
+  @@map("agencies")
 }
 
-model GymAdvantage {
+model AgencyAdvantage {
   id          String   @id @default(cuid())
-  gymId       String
+  agencyId    String
   title       String
   description String?
   order       Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  gym         Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  agency      Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
 
-  @@index([gymId])
-  @@map("gym_advantages")
+  @@index([agencyId])
+  @@map("agency_advantages")
 }
 
-model GymUser {
+model AgencyUser {
   id        String   @id @default(cuid())
   userId    String
-  gymId     String
+  agencyId  String
   role      UserRole @default(AGENT)
   createdAt DateTime @default(now())
-  gym       Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  agency    Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, gymId])
-  @@map("gym_users")
+  @@unique([userId, agencyId])
+  @@map("agency_users")
 }
+
+// ==========================================
+// PROPERTY (INMUEBLE)
+// ==========================================
+
+model Property {
+  id              String            @id @default(cuid())
+  agencyId        String
+  agentId         String?           // Agente asignado
+
+  // Basic Info
+  title           String
+  description     String?
+  reference       String?           // Referencia interna
+
+  // Property Type & Transaction
+  propertyType    PropertyType
+  transactionType TransactionType
+
+  // Location
+  address         String?
+  city            String?
+  zone            String?           // Barrio/Zona
+  state           String?           // Provincia
+  zipCode         String?
+  country         String?           @default("España")
+  latitude        Float?
+  longitude       Float?
+
+  // Characteristics
+  price           Float
+  pricePerSqm     Float?            // Precio por m²
+  sqmTotal        Float?            // Metros cuadrados totales
+  sqmBuilt        Float?            // Metros construidos
+  sqmUsable       Float?            // Metros útiles
+  bedrooms        Int?
+  bathrooms       Int?
+  floors          Int?              // Número de plantas
+  floor           Int?              // Planta del inmueble
+  hasElevator     Boolean?          @default(false)
+  hasParking      Boolean?          @default(false)
+  parkingSpaces   Int?
+  hasPool         Boolean?          @default(false)
+  hasTerrace      Boolean?          @default(false)
+  hasGarden       Boolean?          @default(false)
+  hasAC           Boolean?          @default(false)
+  hasHeating      Boolean?          @default(false)
+  yearBuilt       Int?
+  energyRating    String?           // A, B, C, D, E, F, G
+
+  // Additional Features
+  features        String[]          // Array de características adicionales
+
+  // Media
+  images          String[]          // Array de URLs de imágenes
+  videoUrl        String?
+  virtualTourUrl  String?
+
+  // Status
+  status          PropertyStatus    @default(AVAILABLE)
+  featured        Boolean           @default(false)
+  publishedAt     DateTime?
+
+  // Timestamps
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  deletedAt       DateTime?
+  deletedBy       String?
+  isDeleted       Boolean           @default(false)
+
+  // Relations
+  agency          Agency            @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  agent           User?             @relation(fields: [agentId], references: [id])
+  visits          PropertyVisit[]
+  leadInterests   LeadPropertyInterest[]
+
+  @@index([agencyId])
+  @@index([isDeleted])
+  @@index([status])
+  @@index([propertyType])
+  @@index([transactionType])
+  @@index([city])
+  @@index([zone])
+  @@index([price])
+  @@map("properties")
+}
+
+// ==========================================
+// LEAD (CLIENTE POTENCIAL)
+// ==========================================
 
 model Lead {
   id        String     @id @default(cuid())
-  gymId     String
+  agencyId  String
   name      String
   email     String?
   phone     String
-  cpf       String?    @unique
-  birthDate DateTime?
-  address   String?
-  zipCode   String?
-  status    LeadStatus @default(NEW)
-  source    LeadSource @default(WHATSAPP)
-  score     Int        @default(0)
-  notes     String?
 
-  evoMemberId  String?
-  assignedToId String?
+  // Real Estate Specific Fields
+  transactionInterest TransactionType?  // COMPRA, ALQUILER, VENTA
+  propertyTypeInterest PropertyType[]   // Tipos de inmueble de interés
+  budgetMin           Float?            // Presupuesto mínimo
+  budgetMax           Float?            // Presupuesto máximo
+  sqmMin              Float?            // M² mínimos
+  sqmMax              Float?            // M² máximos
+  bedroomsMin         Int?              // Habitaciones mínimas
+  bathroomsMin        Int?              // Baños mínimos
+  preferredZones      String[]          // Zonas preferidas
+  preferredFeatures   String[]          // Características deseadas
+  timeline            String?           // Urgencia: INMEDIATO, 1_MES, 3_MESES, 6_MESES, SIN_PRISA
 
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  // General Fields
+  status              LeadStatus        @default(NEW)
+  source              LeadSource        @default(WHATSAPP)
+  score               Int               @default(0)
+  notes               String?
+  assignedToId        String?
+
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
   deletedAt     DateTime?
   deletedBy     String?
-  isDeleted     Boolean        @default(false)
-  activities    ActivityLog[]
-  conversations Conversation[]
-  followUps     FollowUp[]
-  members       Member[]
-  gym           Gym            @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  isDeleted     Boolean                @default(false)
 
-  @@unique([gymId, phone])
+  // Relations
+  agency            Agency                 @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  activities        ActivityLog[]
+  conversations     Conversation[]
+  followUps         FollowUp[]
+  propertyInterests LeadPropertyInterest[]
+  propertyVisits    PropertyVisit[]
+
+  @@unique([agencyId, phone])
   @@index([isDeleted])
-  @@index([gymId, isDeleted])
+  @@index([agencyId, isDeleted])
   @@index([status])
   @@index([assignedToId])
   @@map("leads")
 }
+
+// Junction table for Lead-Property interests
+model LeadPropertyInterest {
+  id         String   @id @default(cuid())
+  leadId     String
+  propertyId String
+  interest   Int      @default(5) // 1-10 nivel de interés
+  notes      String?
+  createdAt  DateTime @default(now())
+  lead       Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([leadId, propertyId])
+  @@map("lead_property_interests")
+}
+
+// ==========================================
+// PROPERTY VISIT (CITA DE VISITA)
+// ==========================================
+
+model PropertyVisit {
+  id          String           @id @default(cuid())
+  agencyId    String
+  propertyId  String
+  leadId      String
+  agentId     String?          // Agente asignado a la visita
+
+  // Scheduling
+  scheduledAt DateTime
+  duration    Int              @default(30) // Duración en minutos
+  endTime     DateTime?
+
+  // Status
+  status      VisitStatus      @default(SCHEDULED)
+
+  // Details
+  notes       String?
+  feedback    String?          // Feedback después de la visita
+  rating      Int?             // Valoración del cliente 1-5
+
+  // Reminders
+  reminderSent    Boolean      @default(false)
+  reminderSentAt  DateTime?
+  confirmedAt     DateTime?
+  completedAt     DateTime?
+  cancelledAt     DateTime?
+  cancelReason    String?
+
+  // Timestamps
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  // Relations
+  agency      Agency           @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  property    Property         @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  lead        Lead             @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  agent       User?            @relation("AssignedAgent", fields: [agentId], references: [id])
+
+  @@index([agencyId])
+  @@index([propertyId])
+  @@index([leadId])
+  @@index([agentId])
+  @@index([scheduledAt])
+  @@index([status])
+  @@map("property_visits")
+}
+
+// ==========================================
+// VOICEFLOW INTEGRATION
+// ==========================================
+
+model VoiceSession {
+  id          String   @id @default(cuid())
+  agencyId    String
+  leadId      String?
+  sessionId   String   @unique // Voiceflow session ID
+  phone       String?  // Teléfono del cliente
+
+  // Session Data
+  transcript  Json?    // Transcripción completa
+  intents     String[] // Intenciones detectadas
+  entities    Json?    // Entidades extraídas (tipo inmueble, precio, zona, etc.)
+
+  // Extracted Information
+  extractedPropertyType    String?
+  extractedTransactionType String?
+  extractedBudgetMin       Float?
+  extractedBudgetMax       Float?
+  extractedZones           String[]
+  extractedSqm             Float?
+  extractedBedrooms        Int?
+  appointmentRequested     Boolean  @default(false)
+  appointmentDate          DateTime?
+
+  // Status
+  status      VoiceSessionStatus @default(ACTIVE)
+
+  // Timestamps
+  startedAt   DateTime @default(now())
+  endedAt     DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  agency      Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  @@index([agencyId])
+  @@index([leadId])
+  @@index([sessionId])
+  @@index([phone])
+  @@map("voice_sessions")
+}
+
+// ==========================================
+// CONVERSATION & MESSAGES
+// ==========================================
 
 model Conversation {
   id          String             @id @default(cuid())
@@ -178,6 +414,10 @@ model Message {
   @@map("messages")
 }
 
+// ==========================================
+// FOLLOW-UPS
+// ==========================================
+
 model FollowUp {
   id          String         @id @default(cuid())
   leadId      String
@@ -193,30 +433,43 @@ model FollowUp {
   @@map("follow_ups")
 }
 
+// ==========================================
+// AI PROMPTS
+// ==========================================
+
 model AIPrompt {
   id                String   @id @default(cuid())
-  gymId             String   @unique
+  agencyId          String   @unique
   systemPrompt      String
   greetingMessage   String?
   qualificationFlow Json?
   objectionHandling Json?
   faqs              Json?
   escalationRules   Json?
+
+  // Real Estate Specific Prompts
+  propertyInquiryPrompt    String?  // Prompt para consultas de propiedades
+  visitSchedulingPrompt    String?  // Prompt para agendar visitas
+  priceNegotiationPrompt   String?  // Prompt para negociación
+
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
-  gym               Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  agency            Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
 
   @@map("ai_prompts")
 }
 
-// WhatsApp Meta Configuration (Shared across all gyms)
+// ==========================================
+// WHATSAPP CONFIGURATION
+// ==========================================
+
 model WhatsAppMetaConfig {
   id                    String   @id @default(cuid())
   metaBusinessManagerId String?
   metaAppId             String?
   metaAppSecret         String?
   webhookVerifyToken    String?
-  webhookUrl            String? // e.g., https://api.duxfit.com/webhooks/whatsapp
+  webhookUrl            String?
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
@@ -225,78 +478,21 @@ model WhatsAppMetaConfig {
 
 model WhatsAppAccount {
   id            String         @id @default(cuid())
-  gymId         String
+  agencyId      String
   phoneNumber   String         @unique
   phoneNumberId String
-  accessToken   String // Per-gym permanent access token
+  accessToken   String
   status        WhatsAppStatus @default(PENDING)
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
-  gym           Gym            @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  agency        Agency         @relation(fields: [agencyId], references: [id], onDelete: Cascade)
 
   @@map("whatsapp_accounts")
 }
 
-model Plan {
-  id          String   @id @default(cuid())
-  gymId       String
-  name        String
-  description String?
-  price       Float
-  duration    Int // Duration in days
-  features    Json? // Array of features/benefits
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  gym         Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade)
-  members     Member[]
-
-  @@index([gymId])
-  @@index([active])
-  @@map("plans")
-}
-
-model Member {
-  id                   String        @id @default(cuid())
-  gymId                String
-  leadId               String? // Link to original lead if converted from lead
-  planId               String? // Selected plan
-  // Registration Information
-  fullName             String
-  cpf                  String        @unique
-  birthDate            DateTime
-  address              String?
-  zipCode              String?
-  preferredWorkoutTime String? // e.g., "Morning", "Afternoon", "Evening"
-  gymGoal              String? // Fitness goal
-  email                String?
-  phone                String // WhatsApp number
-  // Membership Information
-  status               MemberStatus  @default(PENDING)
-  planExpirationDate   DateTime?
-  approvedBy           String? // User ID who approved
-  approvedAt           DateTime?
-  // Soft Delete
-  isDeleted            Boolean       @default(false)
-  deletedAt            DateTime?
-  deletedBy            String?
-  // Timestamps
-  createdAt            DateTime      @default(now())
-  updatedAt            DateTime      @updatedAt
-  // Relations
-  gym                  Gym           @relation(fields: [gymId], references: [id], onDelete: Cascade)
-  plan                 Plan?         @relation(fields: [planId], references: [id])
-  lead                 Lead?         @relation(fields: [leadId], references: [id])
-  approver             User?         @relation(fields: [approvedBy], references: [id])
-  activities           ActivityLog[]
-
-  @@index([gymId])
-  @@index([isDeleted])
-  @@index([status])
-  @@index([cpf])
-  @@index([phone])
-  @@map("members")
-}
+// ==========================================
+// NOTIFICATIONS
+// ==========================================
 
 model Notification {
   id        String           @id @default(cuid())
@@ -312,28 +508,34 @@ model Notification {
   @@map("notifications")
 }
 
+// ==========================================
+// ACTIVITY LOGS
+// ==========================================
+
 model ActivityLog {
   id          String       @id @default(cuid())
   userId      String?
   leadId      String?
-  memberId    String?
-  gymId       String?
+  agencyId    String?
   type        ActivityType
   description String
   metadata    Json?
   createdAt   DateTime     @default(now())
   lead        Lead?        @relation(fields: [leadId], references: [id])
-  member      Member?      @relation(fields: [memberId], references: [id])
   user        User?        @relation(fields: [userId], references: [id])
 
   @@map("activity_logs")
 }
 
+// ==========================================
+// INVITATIONS
+// ==========================================
+
 model Invitation {
   id        String    @id @default(cuid())
   code      String    @unique
   email     String
-  gymId     String
+  agencyId  String
   role      UserRole
   invitedBy String
   expiresAt DateTime
@@ -342,7 +544,7 @@ model Invitation {
   isDeleted Boolean   @default(false)
   deletedAt DateTime?
   deletedBy String?
-  gym       Gym       @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  agency    Agency    @relation(fields: [agencyId], references: [id], onDelete: Cascade)
   inviter   User      @relation(fields: [invitedBy], references: [id], onDelete: Cascade)
 
   @@index([isDeleted])
@@ -351,34 +553,141 @@ model Invitation {
   @@map("invitations")
 }
 
+// ==========================================
+// REGISTRATION REQUESTS
+// ==========================================
+
 model RegistrationRequest {
   id              String                    @id @default(cuid())
   name            String
   email           String
   phone           String?
-  password        String // Hashed password
-  role            UserRole // AGENT or MANAGER
-  gymId           String
+  password        String
+  role            UserRole
+  agencyId        String
   status          RegistrationRequestStatus @default(PENDING)
-  requestedBy     String? // User ID if logged in
-  approvedBy      String? // User ID who approved
-  rejectedBy      String? // User ID who rejected
+  requestedBy     String?
+  approvedBy      String?
+  rejectedBy      String?
   approvedAt      DateTime?
   rejectedAt      DateTime?
   rejectionReason String?
   createdAt       DateTime                  @default(now())
   updatedAt       DateTime                  @updatedAt
 
-  gym      Gym   @relation(fields: [gymId], references: [id], onDelete: Cascade)
-  approver User? @relation("RegistrationApprover", fields: [approvedBy], references: [id])
-  rejecter User? @relation("RegistrationRejecter", fields: [rejectedBy], references: [id])
+  agency   Agency @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  approver User?  @relation("RegistrationApprover", fields: [approvedBy], references: [id])
+  rejecter User?  @relation("RegistrationRejecter", fields: [rejectedBy], references: [id])
 
   @@index([status])
-  @@index([gymId])
+  @@index([agencyId])
   @@index([email])
   @@index([role])
   @@map("registration_requests")
 }
+
+// ==========================================
+// INTEGRATIONS
+// ==========================================
+
+model Integration {
+  id            String            @id @default(cuid())
+  agencyId      String
+  type          IntegrationType
+  name          String
+  status        IntegrationStatus @default(INACTIVE)
+  config        Json
+  lastSyncAt    DateTime?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  agency        Agency            @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  syncHistory   SyncHistory[]
+  fieldMappings FieldMapping[]
+
+  @@unique([agencyId, type])
+  @@map("integrations")
+}
+
+model SyncHistory {
+  id            String      @id @default(cuid())
+  integrationId String
+  type          SyncType
+  status        SyncStatus
+  recordsSynced Int         @default(0)
+  duration      Int         @default(0)
+  errorMessage  String?
+  metadata      Json?
+  startedAt     DateTime    @default(now())
+  completedAt   DateTime?
+  integration   Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@index([integrationId])
+  @@index([startedAt])
+  @@map("sync_history")
+}
+
+model FieldMapping {
+  id            String      @id @default(cuid())
+  integrationId String
+  localField    String
+  externalField String
+  isActive      Boolean     @default(true)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  integration   Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@unique([integrationId, localField])
+  @@map("field_mappings")
+}
+
+// ==========================================
+// WEBHOOKS (for n8n/Make integration)
+// ==========================================
+
+model Webhook {
+  id            String       @id @default(cuid())
+  agencyId      String
+  name          String
+  url           String
+  events        String[]     // Events to trigger: LEAD_CREATED, VISIT_SCHEDULED, etc.
+  secret        String?      // For signature verification
+  headers       Json?        // Custom headers
+  isActive      Boolean      @default(true)
+  retryCount    Int          @default(3)
+  lastTriggered DateTime?
+  failureCount  Int          @default(0)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  agency        Agency       @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  webhookLogs   WebhookLog[]
+
+  @@index([agencyId])
+  @@index([isActive])
+  @@map("webhooks")
+}
+
+model WebhookLog {
+  id          String   @id @default(cuid())
+  webhookId   String
+  eventType   String
+  payload     Json
+  response    Json?
+  statusCode  Int?
+  duration    Int?
+  error       String?
+  success     Boolean  @default(false)
+  triggeredAt DateTime @default(now())
+  webhook     Webhook  @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([webhookId])
+  @@index([triggeredAt])
+  @@index([eventType])
+  @@map("webhook_logs")
+}
+
+// ==========================================
+// ENUMS
+// ==========================================
 
 enum RegistrationRequestStatus {
   PENDING
@@ -398,19 +707,74 @@ enum UserStatus {
   SUSPENDED
 }
 
-enum GymStatus {
+enum AgencyStatus {
   ACTIVE
   INACTIVE
   TRIAL
 }
 
+// Real Estate Property Types
+enum PropertyType {
+  APARTMENT      // Piso
+  HOUSE          // Casa
+  VILLA          // Chalet
+  PENTHOUSE      // Ático
+  DUPLEX         // Dúplex
+  STUDIO         // Estudio
+  LOFT           // Loft
+  TOWNHOUSE      // Adosado
+  COUNTRY_HOUSE  // Casa rural
+  COMMERCIAL     // Local comercial
+  OFFICE         // Oficina
+  WAREHOUSE      // Nave industrial
+  LAND           // Terreno
+  PARKING        // Garaje
+  STORAGE        // Trastero
+  BUILDING       // Edificio
+  OTHER          // Otro
+}
+
+enum TransactionType {
+  SALE           // Venta
+  RENT           // Alquiler
+  RENT_TO_OWN    // Alquiler con opción a compra
+  TRANSFER       // Traspaso
+}
+
+enum PropertyStatus {
+  AVAILABLE      // Disponible
+  RESERVED       // Reservado
+  SOLD           // Vendido
+  RENTED         // Alquilado
+  UNAVAILABLE    // No disponible
+  DRAFT          // Borrador
+}
+
+enum VisitStatus {
+  SCHEDULED      // Programada
+  CONFIRMED      // Confirmada
+  IN_PROGRESS    // En curso
+  COMPLETED      // Completada
+  CANCELLED      // Cancelada
+  NO_SHOW        // No se presentó
+  RESCHEDULED    // Reprogramada
+}
+
+enum VoiceSessionStatus {
+  ACTIVE
+  COMPLETED
+  ABANDONED
+  ERROR
+}
+
 enum LeadStatus {
-  NEW
-  CONTACTED
-  QUALIFIED
-  NEGOTIATING
-  CLOSED
-  LOST
+  NEW            // Nuevo
+  CONTACTED      // Contactado
+  QUALIFIED      // Cualificado
+  VISITING       // Visitando propiedades
+  NEGOTIATING    // Negociando
+  CLOSED_WON     // Cerrado ganado
+  CLOSED_LOST    // Cerrado perdido
 }
 
 enum LeadSource {
@@ -419,8 +783,12 @@ enum LeadSource {
   INSTAGRAM
   FACEBOOK
   REFERRAL
-  WALK_IN
+  PORTAL         // Portales inmobiliarios (Idealista, Fotocasa, etc.)
+  VOICEFLOW      // Desde interacción de voz
   PHONE
+  WALK_IN
+  GOOGLE_ADS
+  META_ADS
   OTHER
 }
 
@@ -436,12 +804,15 @@ enum MessageType {
   DOCUMENT
   AUDIO
   VIDEO
+  LOCATION
+  PROPERTY_CARD  // Tarjeta de propiedad
 }
 
 enum MessageSender {
   AI
   AGENT
   CUSTOMER
+  VOICEFLOW
 }
 
 enum FollowUpStatus {
@@ -456,6 +827,8 @@ enum FollowUpType {
   WHATSAPP
   EMAIL
   VISIT
+  DOCUMENT_REQUEST  // Solicitud de documentos
+  OFFER             // Envío de oferta
 }
 
 enum WhatsAppStatus {
@@ -470,13 +843,17 @@ enum NotificationType {
   FOLLOW_UP_DUE
   SYSTEM_ALERT
   LEAD_STATUS_CHANGE
-  MEMBER_APPLICATION_RECEIVED
-  MEMBER_APPLICATION_APPROVED
-  MEMBER_APPLICATION_REJECTED
+  VISIT_SCHEDULED
+  VISIT_CONFIRMED
+  VISIT_CANCELLED
+  VISIT_COMPLETED
+  PROPERTY_INQUIRY
+  VOICE_SESSION_COMPLETED
   HUMAN_ASSISTANCE_REQUESTED
   REGISTRATION_REQUEST_CREATED
   REGISTRATION_REQUEST_APPROVED
   REGISTRATION_REQUEST_REJECTED
+  WEBHOOK_TRIGGERED
 }
 
 enum ActivityType {
@@ -489,104 +866,31 @@ enum ActivityType {
   USER_LOGIN
   CONVERSATION_STARTED
   CONVERSATION_CLOSED
-  MEMBER_APPLICATION_CREATED
-  MEMBER_APPLICATION_APPROVED
-  MEMBER_APPLICATION_REJECTED
-  MEMBER_UPDATED
-  MEMBER_DELETED
-}
-
-// Integration Models
-model Integration {
-  id            String            @id @default(cuid())
-  gymId         String
-  type          IntegrationType
-  name          String
-  status        IntegrationStatus @default(INACTIVE)
-  config        Json
-  lastSyncAt    DateTime?
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
-  gym           Gym               @relation(fields: [gymId], references: [id], onDelete: Cascade)
-  syncHistory   SyncHistory[]
-  fieldMappings FieldMapping[]
-
-  @@unique([gymId, type])
-  @@map("integrations")
-}
-
-model SyncHistory {
-  id            String      @id @default(cuid())
-  integrationId String
-  type          SyncType
-  status        SyncStatus
-  recordsSynced Int         @default(0)
-  duration      Int         @default(0) // in milliseconds
-  errorMessage  String?
-  metadata      Json?
-  startedAt     DateTime    @default(now())
-  completedAt   DateTime?
-  integration   Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
-
-  @@index([integrationId])
-  @@index([startedAt])
-  @@map("sync_history")
-}
-
-model FieldMapping {
-  id            String      @id @default(cuid())
-  integrationId String
-  duxfitField   String
-  externalField String
-  isActive      Boolean     @default(true)
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  integration   Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
-
-  @@unique([integrationId, duxfitField])
-  @@map("field_mappings")
-}
-
-model Webhook {
-  id            String       @id @default(cuid())
-  gymId         String
-  name          String
-  url           String
-  events        String[] // Array of event types to listen for
-  secret        String?
-  isActive      Boolean      @default(true)
-  lastTriggered DateTime?
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
-  gym           Gym          @relation(fields: [gymId], references: [id], onDelete: Cascade)
-  webhookLogs   WebhookLog[]
-
-  @@map("webhooks")
-}
-
-model WebhookLog {
-  id          String   @id @default(cuid())
-  webhookId   String
-  eventType   String
-  payload     Json
-  response    Json?
-  statusCode  Int?
-  duration    Int? // in milliseconds
-  error       String?
-  triggeredAt DateTime @default(now())
-  webhook     Webhook  @relation(fields: [webhookId], references: [id], onDelete: Cascade)
-
-  @@index([webhookId])
-  @@index([triggeredAt])
-  @@map("webhook_logs")
+  PROPERTY_CREATED
+  PROPERTY_UPDATED
+  PROPERTY_DELETED
+  VISIT_SCHEDULED
+  VISIT_CONFIRMED
+  VISIT_COMPLETED
+  VISIT_CANCELLED
+  VOICE_SESSION_STARTED
+  VOICE_SESSION_COMPLETED
+  WEBHOOK_TRIGGERED
 }
 
 enum IntegrationType {
-  EVO
+  HUBSPOT
+  SALESFORCE
+  ZOHO
+  PIPEDRIVE
   GOOGLE_ANALYTICS
   FACEBOOK_PIXEL
   ZAPIER
+  N8N
+  MAKE
   WEBHOOK
+  IDEALISTA       // Portal inmobiliario
+  FOTOCASA        // Portal inmobiliario
   CUSTOM
 }
 
@@ -609,13 +913,4 @@ enum SyncStatus {
   SUCCESS
   FAILED
   CANCELLED
-}
-
-enum MemberStatus {
-  PENDING
-  APPROVED
-  REJECTED
-  ACTIVE
-  INACTIVE
-  EXPIRED
 }

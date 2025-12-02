@@ -28,6 +28,9 @@ import whatsappConfigRoutes from './routes/whatsappConfig.routes';
 import webhooksRoutes from './routes/webhooks.routes';
 import planRoutes from './routes/plan.routes';
 import memberRoutes from './routes/member.routes';
+import propertyRoutes from './routes/property.routes';
+import propertyVisitRoutes from './routes/propertyVisit.routes';
+import voiceflowRoutes from './routes/voiceflow.routes';
 import { setupSocket } from './config/socket';
 import { setSocketInstance } from './utils/socketManager';
 
@@ -170,9 +173,10 @@ app.use('/uploads', (req, res, next) => {
 app.get('/health', (_req: Request, res: Response) => {
   res.status(200).json({
     status: 'OK',
-    message: 'DuxFit CRM Backend is running',
+    message: 'Real Estate AI CRM Backend is running',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV,
+    version: '2.0.0'
   });
 });
 
@@ -198,6 +202,12 @@ app.use('/api/whatsapp', whatsappConfigRoutes);
 app.use('/api/webhooks', webhooksRoutes);
 app.use('/api/plans', planRoutes);
 app.use('/api/members', memberRoutes);
+app.use('/api/properties', propertyRoutes);
+app.use('/api/visits', propertyVisitRoutes);
+app.use('/api/voiceflow', voiceflowRoutes);
+
+// Alias para compatibilidad: /api/agencies apunta a /api/gyms
+app.use('/api/agencies', gymRoutes);
 
 console.log('✅ Follow-up routes registered at /api/followups');
 console.log('✅ Notification routes registered at /api/notifications');
@@ -211,6 +221,10 @@ console.log('✅ WhatsApp routes registered at /api/whatsapp');
 console.log('✅ Webhooks routes registered at /api/webhooks');
 console.log('✅ Plan routes registered at /api/plans');
 console.log('✅ Member routes registered at /api/members');
+console.log('✅ Property routes registered at /api/properties');
+console.log('✅ Visit routes registered at /api/visits');
+console.log('✅ Voiceflow routes registered at /api/voiceflow');
+console.log('✅ Agencies alias registered at /api/agencies');
 
 // 404 handler
 app.use((req: Request, res: Response) => {
@@ -252,7 +266,7 @@ httpServer.listen(PORT, HOST, () => {
   console.log(`
 ╔═══════════════════════════════════════════════════════╗
 ║                                                       ║
-║   🏋️  DuxFit CRM Backend Server                      ║
+║   🏠 Real Estate AI CRM - Backend Server             ║
 ║                                                       ║
 ║   Status: Running ✓                                   ║
 ║   Host: ${HOST}                                         ║
@@ -261,6 +275,7 @@ httpServer.listen(PORT, HOST, () => {
 ║   API: http://${HOST}:${PORT}/api                    ║
 ║   Health: http://${HOST}:${PORT}/health              ║
 ║   Socket.IO: ✓ Ready                                  ║
+║   Voiceflow: ✓ Ready                                  ║
 ║                                                       ║
 ╚═══════════════════════════════════════════════════════╝
   `);
